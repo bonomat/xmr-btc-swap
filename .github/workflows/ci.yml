@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install tor
-        run: sudo apt-get apt-transport-https
+        run: sudo apt install tor
 
       - name: Checkout sources
         uses: actions/checkout@v2
