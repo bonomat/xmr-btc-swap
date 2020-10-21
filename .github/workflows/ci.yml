@@ -57,7 +57,11 @@ jobs:
           sudo add-apt-repository 'deb-src https://deb.torproject.org/torproject.org bionic main'
           sudo curl https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc | gpg --import
           sudo gpg --export A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89 | apt-key add -
+          echo "wget asc"
+          sudo wget -q https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc -O- | sudo apt-key add -
+          echo "updating"
           sudo apt update
+          echo "installing tor"
           sudo apt install tor deb.torproject.org-keyring
           sudo cp xmr-btc/tests/harness/torrc /etc/tor/torrc
           sudo chown -R `whoami` /var/lib/tor
