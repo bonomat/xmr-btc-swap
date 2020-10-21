@@ -46,8 +46,14 @@ jobs:
   build_test:
     runs-on: ubuntu-latest
     steps:
-      - name: Install tor
-        run: sudo apt install tor
+      - name: Install and run Tor
+        run: |
+          whoami
+          sudo apt install tor
+          sudo /etc/init.d/tor stop
+          sudo chown -R `whoami` /var/lib/tor
+          sudo chown -R `whoami` /etc/tor
+          tor --CookieAuthentication 1 --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
 
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -77,6 +83,7 @@ jobs:
         run: cargo check --workspace --all-targets --all-features
 
       - name: Cargo test
-        run: cargo test --workspace --all-features
+        run: cargo test -p xmr-btc test_tor_control_port --all-features
         env:
           MONERO_ADDITIONAL_SLEEP_PERIOD: 60000
+          USE_LOCAL_TOR: true
