@@ -53,12 +53,10 @@ jobs:
       - name: Install
         run: |
           sudo apt install software-properties-common
-          sudo add-apt-repository 'deb https://deb.torproject.org/torproject.org bionic main'
-          sudo add-apt-repository 'deb-src https://deb.torproject.org/torproject.org bionic main'
-          sudo curl https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc | gpg --import
-          sudo gpg --export A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89 | apt-key add -
+          sudo curl https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc | sudo gpg --import
+          sudo gpg --export A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89 | sudo apt-key add -
           echo "wget asc"
-          sudo wget -q https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc -O- | sudo apt-key add -
+          sudo add-apt-repository 'deb https://deb.torproject.org/torproject.org bionic main'
           echo "updating"
           sudo apt update
           echo "installing tor"
