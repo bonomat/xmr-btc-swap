@@ -50,15 +50,14 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install and run Tor
+      - name: Install
         run: |
-          whoami
           sudo apt install tor
           sudo cp xmr-btc/tests/harness/torrc /etc/tor/torrc
           sudo chown -R `whoami` /var/lib/tor
           sudo chown -R `whoami` /etc/tor
-          sudo /etc/init.d/tor restart
-      #          tor --CookieAuthentication 1 --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
+          sudo /etc/init.d/tor stop
+#          tor --CookieAuthentication 1 --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -83,6 +82,10 @@ jobs:
 
       - name: Cargo check all features
         run: cargo check --workspace --all-targets --all-features
+
+      - name: Run Tor
+        run: |
+          tor --CookieAuthentication 1 --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
 
       - name: Cargo test
         run: cargo test -p xmr-btc test_tor_control_port --all-features
