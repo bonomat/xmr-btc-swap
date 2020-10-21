@@ -5,7 +5,7 @@ use std::{
 };
 use tokio::net::TcpStream;
 use torut::{
-    control::{AsyncEvent, AuthenticatedConn, ConnError, TorAuthData, UnauthenticatedConn},
+    control::{AsyncEvent, AuthenticatedConn, ConnError, UnauthenticatedConn},
     onion::TorSecretKeyV3,
 };
 
