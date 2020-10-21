@@ -113,6 +113,6 @@ impl AuthenticatedConnection {
                 .iter(),
             )
             .await
-            .map_err(|_| anyhow!("Could not add onion service."))
+            .map_err(|e| anyhow!("Could not add onion service.: {:#?}", e))
     }
 }
