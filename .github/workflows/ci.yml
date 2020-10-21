@@ -50,19 +50,14 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install
+      - name: Install and stop tor in case it was running
         run: |
           sudo apt install software-properties-common
           sudo curl https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc | sudo gpg --import
           sudo gpg --export A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89 | sudo apt-key add -
-          echo "wget asc"
           sudo add-apt-repository 'deb https://deb.torproject.org/torproject.org bionic main'
-          echo "updating"
           sudo apt update
-          echo "installing tor"
           sudo apt install tor deb.torproject.org-keyring
-          sudo chown -R `whoami` /var/lib/tor
-          sudo chown -R `whoami` /etc/tor
           sudo /etc/init.d/tor stop
 
       - name: Install Rust toolchain
@@ -93,4 +88,3 @@ jobs:
         run: cargo test -p xmr-btc test_tor_control_port --all-features
         env:
           MONERO_ADDITIONAL_SLEEP_PERIOD: 60000
-          USE_LOCAL_TOR: false
