@@ -5,7 +5,7 @@ use std::{
 };
 use tokio::net::TcpStream;
 use torut::{
-    control::{AsyncEvent, AuthenticatedConn, ConnError, UnauthenticatedConn},
+    control::{AsyncEvent, AuthenticatedConn, ConnError, TorAuthData, UnauthenticatedConn},
     onion::TorSecretKeyV3,
 };
 
@@ -77,6 +77,7 @@ impl UnauthenticatedConnection {
             .make_auth_data()?
             .ok_or_else(|| anyhow!("Failed to make auth data."))?;
 
+        let tor_auth_data = TorAuthData::Null;
         // Get an authenticated connection to the Tor via the Tor Controller protocol.
         uc.authenticate(&tor_auth_data)
             .await

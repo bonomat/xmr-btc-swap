@@ -85,7 +85,7 @@ jobs:
 
       - name: Run Tor
         run: |
-          tor --CookieAuthentication 1 --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
+          tor --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
 
       - name: Cargo test
         run: cargo test -p xmr-btc test_tor_control_port --all-features
