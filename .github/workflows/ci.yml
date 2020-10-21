@@ -51,10 +51,10 @@ jobs:
           whoami
           sudo apt install tor
           sudo cp xmr-btc/tests/harness/torrc /etc/tor/torrc
-          sudo /etc/init.d/tor stop
           sudo chown -R `whoami` /var/lib/tor
           sudo chown -R `whoami` /etc/tor
-          tor --CookieAuthentication 1 --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
+          sudo /etc/init.d/tor restart
+#          tor --CookieAuthentication 1 --ControlPort 9051 --SocksPort 9050 --runasdaemon 1
 
       - name: Checkout sources
         uses: actions/checkout@v2
