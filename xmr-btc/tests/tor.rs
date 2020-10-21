@@ -61,6 +61,8 @@ mod tor_test {
         let child = run_tor(
             "tor",
             &mut [
+                "--CookieAuthentication",
+                "1",
                 "--ControlPort",
                 control_port.to_string().as_str(),
                 "--SocksPort",
