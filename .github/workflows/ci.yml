@@ -50,6 +50,7 @@ jobs:
         run: |
           whoami
           sudo apt install tor
+          sudo cp xmr-btc/tests/harness/torrc /etc/tor/torrc
           sudo /etc/init.d/tor stop
           sudo chown -R `whoami` /var/lib/tor
           sudo chown -R `whoami` /etc/tor
