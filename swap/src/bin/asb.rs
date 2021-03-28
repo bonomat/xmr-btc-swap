@@ -16,6 +16,7 @@ use anyhow::{Context, Result};
 use bdk::descriptor::Segwitv0;
 use bdk::keys::DerivableKey;
 use libp2p::Swarm;
+use libtor::{HiddenServiceVersion, Tor, TorAddress, TorFlag};
 use prettytable::{row, Table};
 use std::path::Path;
 use std::sync::Arc;
@@ -60,6 +61,22 @@ async fn main() -> Result<()> {
             read_config(config_path)?.expect("after initial setup config can be read")
         }
     };
+
+    // start Tor
+    let tor_tmp_dir = tempfile::tempdir().expect("to create tmp dir for Tor");
+    let tor_tmp_hs_dir = tempfile::tempdir().expect("to create tmp dir for hidden service.");
+    let path = tor_tmp_dir.path().to_str().expect("To ");
+    let hs_path = tor_tmp_hs_dir.path().to_str().expect("To ");
+    Tor::new()
+        .flag(TorFlag::DataDirectory(path.into()))
+        .flag(TorFlag::SocksPort(19050))
+        .flag(TorFlag::HiddenServiceDir(hs_path.into()))
+        .flag(TorFlag::HiddenServiceVersion(HiddenServiceVersion::V3))
+        .flag(TorFlag::HiddenServicePort(
+            TorAddress::Port(9939),
+            None.into(),
+        ))
+        .start()?;
 
     info!(
         "Database and Seed will be stored in directory: {}",
