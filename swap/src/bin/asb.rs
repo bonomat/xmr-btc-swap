@@ -13,8 +13,11 @@
 #![allow(non_snake_case)]
 
 use anyhow::{Context, Result};
+use libp2p::core::multiaddr::Protocol;
+use libp2p::core::Multiaddr;
 use libp2p::Swarm;
 use prettytable::{row, Table};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use structopt::StructOpt;
 use swap::asb::command::{Arguments, Command};
@@ -29,7 +32,9 @@ use swap::network::swarm;
 use swap::protocol::alice::event_loop::KrakenRate;
 use swap::protocol::alice::{run, EventLoop};
 use swap::seed::Seed;
-use swap::{asb, bitcoin, env, kraken, monero};
+use swap::tor::{AuthenticatedConnection, UnauthenticatedConnection};
+use swap::{asb, bitcoin, env, kraken, monero, tor};
+use torut::onion::TorSecretKeyV3;
 use tracing::{info, warn};
 use tracing_subscriber::filter::LevelFilter;
 
@@ -73,6 +78,21 @@ async fn main() -> Result<()> {
 
     let env_config = env::Testnet::get_config();
 
+    let uac = tor::UnauthenticatedConnection::default()
+        .with_control_port(config.tor.control_port)
+        .with_socks5_port(config.tor.socks5_port);
+    let (tor_socks5_port, _ac) = match uac.assert_tor_running().await {
+        Ok(_) => {
+            tracing::info!("Tor found. Setting up hidden service. ");
+            let ac = register_tor_services(config.network.clone().listen, uac).await?;
+            (Some(uac.tor_proxy_port()), Some(ac))
+        }
+        Err(_) => {
+            tracing::warn!("Tor not found. Running on clearnet. ");
+            (None, None)
+        }
+    };
+
     match opt.cmd {
         Command::Start {
             max_buy,
@@ -97,7 +117,7 @@ async fn main() -> Result<()> {
 
             let kraken_price_updates = kraken::connect()?;
 
-            let mut swarm = swarm::alice(&seed)?;
+            let mut swarm = swarm::alice(&seed, tor_socks5_port)?;
 
             for listen in config.network.listen {
                 Swarm::listen_on(&mut swarm, listen.clone())
@@ -211,4 +231,47 @@ async fn init_monero_wallet(
     .await?;
 
     Ok(wallet)
+}
+
+/// Registers a hidden service for each network.
+/// Note: Once ac goes out of scope, the services will be de-registered.
+async fn register_tor_services(
+    networks: Vec<Multiaddr>,
+    uac: UnauthenticatedConnection,
+) -> Result<AuthenticatedConnection> {
+    let mut ac = uac.into_authenticated_connection().await?;
+
+    let hidden_services_details = networks
+        .iter()
+        .flat_map(|network| {
+            network.iter().map(|protocol| match protocol {
+                Protocol::Tcp(port) => Some((
+                    port,
+                    SocketAddr::new(IpAddr::from(Ipv4Addr::new(127, 0, 0, 1)), port),
+                )),
+                _ => {
+                    // We only care for Tcp for now.
+                    None
+                }
+            })
+        })
+        .filter_map(|details| details)
+        .collect::<Vec<_>>();
+
+    // Note: ideally we have deterministic keys but unfortunately there is no Api
+    // for that yet.
+    let key = TorSecretKeyV3::generate();
+
+    ac.add_services(&hidden_services_details, &key).await?;
+
+    let onion_address = key
+        .public()
+        .get_onion_address()
+        .get_address_without_dot_onion();
+
+    hidden_services_details.iter().for_each(|(port, _)| {
+        tracing::info!("/onion3/{}:{}", onion_address, port);
+    });
+
+    Ok(ac)
 }

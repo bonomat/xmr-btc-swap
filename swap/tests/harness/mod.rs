@@ -24,6 +24,7 @@ use swap::protocol::alice::{AliceState, Swap};
 use swap::protocol::bob::BobState;
 use swap::protocol::{alice, bob};
 use swap::seed::Seed;
+use swap::tor::UnauthenticatedConnection;
 use swap::{bitcoin, env, monero};
 use tempfile::tempdir;
 use testcontainers::clients::Cli;
@@ -32,6 +33,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, timeout};
+use torut::onion::TorSecretKeyV3;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 use uuid::Uuid;
@@ -93,6 +95,7 @@ struct BobParams {
     monero_wallet: Arc<monero::Wallet>,
     alice_address: Multiaddr,
     alice_peer_id: PeerId,
+    tor_sock5_port: Option<u16>,
     env_config: Config,
 }
 
@@ -116,7 +119,7 @@ impl BobParams {
     }
 
     pub fn new_eventloop(&self, swap_id: Uuid) -> Result<(bob::EventLoop, bob::EventLoopHandle)> {
-        let mut swarm = swarm::bob(&self.seed, self.alice_peer_id)?;
+        let mut swarm = swarm::bob(&self.seed, self.alice_peer_id, self.tor_sock5_port)?;
         swarm
             .behaviour_mut()
             .add_address(self.alice_peer_id, self.alice_address.clone());
@@ -182,6 +185,7 @@ impl TestContext {
             self.env_config,
             self.alice_bitcoin_wallet.clone(),
             self.alice_monero_wallet.clone(),
+            None, // we only care about Tor for happy path
         );
 
         self.alice_handle = alice_handle;
@@ -189,9 +193,13 @@ impl TestContext {
     }
 
     pub async fn alice_next_swap(&mut self) -> alice::Swap {
-        timeout(Duration::from_secs(20), self.alice_swap_handle.recv())
+        self.alice_next_swap_with_timout(20).await
+    }
+
+    pub async fn alice_next_swap_with_timout(&mut self, timout: u64) -> alice::Swap {
+        timeout(Duration::from_secs(timout), self.alice_swap_handle.recv())
             .await
-            .expect("No Alice swap within 20 seconds, aborting because this test is likely waiting for a swap forever...")
+            .expect(format!("No Alice swap within {} seconds, aborting because this test is likely waiting for a swap forever...", timout).as_str())
             .unwrap()
     }
 
@@ -528,8 +536,77 @@ impl Wallet for bitcoin::Wallet {
     }
 }
 
-pub async fn setup_test<T, F, C>(_config: C, testfn: T)
+pub async fn setup_test<T, F, C>(config: C, testfn: T)
 where
+    T: Fn(TestContext) -> F,
+    F: Future<Output = Result<()>>,
+    C: GetConfig,
+{
+    let alice_listen_port = get_port().expect("Failed to find a free port");
+    let alice_listen_address: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}", alice_listen_port)
+        .parse()
+        .expect("failed to parse Alice's address");
+    _setup_test(
+        config,
+        testfn,
+        alice_listen_address.clone(),
+        alice_listen_address,
+        None,
+    )
+    .await;
+}
+
+pub async fn setup_test_with_tor<T, F, C>(config: C, testfn: T)
+where
+    T: Fn(TestContext) -> F,
+    F: Future<Output = Result<()>>,
+    C: GetConfig,
+{
+    // get free port for Alice
+    let alice_listen_port = get_port().expect("Failed to find a free port for service.");
+
+    // setup hidden tor service for Alice
+    let uac = UnauthenticatedConnection::default();
+    let tor_socks5_port = uac.tor_proxy_port();
+    let mut ac = uac
+        .into_authenticated_connection()
+        .await
+        .expect("Could not connect to Tor control port.");
+    let key = TorSecretKeyV3::generate();
+
+    ac.add_service(alice_listen_port, alice_listen_port, &key)
+        .await
+        .expect("Could not add hidden service.");
+    let onion_address = key
+        .public()
+        .get_onion_address()
+        .get_address_without_dot_onion();
+
+    let alice_listen_address: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}", alice_listen_port)
+        .parse()
+        .expect("failed to parse Alice's address");
+
+    let alice_dial_address = format!("/onion3/{}:{}", onion_address, alice_listen_port)
+        .parse()
+        .expect("To be a valid onion multi address");
+
+    _setup_test(
+        config,
+        testfn,
+        alice_listen_address.clone(),
+        alice_dial_address,
+        Some(tor_socks5_port),
+    )
+    .await;
+}
+
+pub async fn _setup_test<T, F, C>(
+    _config: C,
+    testfn: T,
+    alice_listen_address: Multiaddr,
+    alice_dial_address: Multiaddr,
+    tor_sock5_port: Option<u16>,
+) where
     T: Fn(TestContext) -> F,
     F: Future<Output = Result<()>>,
     C: GetConfig,
@@ -570,11 +647,6 @@ where
     )
     .await;
 
-    let alice_listen_port = get_port().expect("Failed to find a free port");
-    let alice_listen_address: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}", alice_listen_port)
-        .parse()
-        .expect("failed to parse Alice's address");
-
     let alice_db_path = tempdir().unwrap().into_path();
     let (alice_handle, alice_swap_handle) = start_alice(
         &alice_seed,
@@ -583,6 +655,7 @@ where
         env_config,
         alice_bitcoin_wallet.clone(),
         alice_monero_wallet.clone(),
+        tor_sock5_port,
     );
 
     let bob_seed = Seed::random().unwrap();
@@ -605,8 +678,9 @@ where
         db_path: tempdir().unwrap().path().to_path_buf(),
         bitcoin_wallet: bob_bitcoin_wallet.clone(),
         monero_wallet: bob_monero_wallet.clone(),
-        alice_address: alice_listen_address.clone(),
+        alice_address: alice_dial_address,
         alice_peer_id: alice_handle.peer_id,
+        tor_sock5_port,
         env_config,
     };
 
@@ -640,10 +714,11 @@ fn start_alice(
     env_config: Config,
     bitcoin_wallet: Arc<bitcoin::Wallet>,
     monero_wallet: Arc<monero::Wallet>,
+    tor_socks5_port: Option<u16>,
 ) -> (AliceApplicationHandle, Receiver<alice::Swap>) {
     let db = Arc::new(Database::open(db_path.as_path()).unwrap());
 
-    let mut swarm = swarm::alice(&seed).unwrap();
+    let mut swarm = swarm::alice(&seed, tor_socks5_port).unwrap();
     swarm.listen_on(listen_address).unwrap();
 
     let (event_loop, swap_handle) = alice::EventLoop::new(

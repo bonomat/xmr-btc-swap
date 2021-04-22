@@ -29,7 +29,7 @@ use swap::network::swarm;
 use swap::protocol::bob;
 use swap::protocol::bob::{Builder, EventLoop};
 use swap::seed::Seed;
-use swap::{bitcoin, cli, env, monero};
+use swap::{bitcoin, cli, env, monero, tor};
 use tracing::{debug, error, info, warn};
 use url::Url;
 use uuid::Uuid;
@@ -51,6 +51,7 @@ async fn main() -> Result<()> {
                     monero_daemon_host,
                 },
             electrum_rpc_url,
+            tor_socks5_port,
         } => {
             let swap_id = Uuid::new_v4();
 
@@ -76,7 +77,14 @@ async fn main() -> Result<()> {
                 init_monero_wallet(data_dir, monero_daemon_host, env_config).await?;
             let bitcoin_wallet = Arc::new(bitcoin_wallet);
 
-            let mut swarm = swarm::bob(&seed, alice_peer_id)?;
+            let tor_socks5_port = {
+                let uac =
+                    tor::UnauthenticatedConnection::default().with_socks5_port(tor_socks5_port);
+                uac.assert_tor_running()
+                    .await
+                    .map_or(None, |_| Some(uac.tor_proxy_port()))
+            };
+            let mut swarm = swarm::bob(&seed, alice_peer_id, tor_socks5_port)?;
             swarm
                 .behaviour_mut()
                 .add_address(alice_peer_id, alice_multiaddr);
@@ -153,6 +161,7 @@ async fn main() -> Result<()> {
                     monero_daemon_host,
                 },
             electrum_rpc_url,
+            tor_socks5_port,
         } => {
             let data_dir = data.0;
             cli::tracing::init(debug, data_dir.join("logs"), swap_id)?;
@@ -173,7 +182,15 @@ async fn main() -> Result<()> {
             let bitcoin_wallet = Arc::new(bitcoin_wallet);
 
             let alice_peer_id = db.get_peer_id(swap_id)?;
-            let mut swarm = swarm::bob(&seed, alice_peer_id)?;
+
+            let tor_socks5_port = {
+                let uac =
+                    tor::UnauthenticatedConnection::default().with_socks5_port(tor_socks5_port);
+                uac.assert_tor_running()
+                    .await
+                    .map_or(None, |_| Some(uac.tor_proxy_port()))
+            };
+            let mut swarm = swarm::bob(&seed, alice_peer_id, tor_socks5_port)?;
             swarm
                 .behaviour_mut()
                 .add_address(alice_peer_id, alice_multiaddr);
