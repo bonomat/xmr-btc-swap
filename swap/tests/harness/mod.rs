@@ -199,7 +199,7 @@ impl TestContext {
     pub async fn alice_next_swap_with_timout(&mut self, timout: u64) -> alice::Swap {
         timeout(Duration::from_secs(timout), self.alice_swap_handle.recv())
             .await
-            .expect(format!("No Alice swap within {} seconds, aborting because this test is likely waiting for a swap forever...", timout).as_str())
+            .unwrap_or_else(|_| panic!("No Alice swap within {} seconds, aborting because this test is likely waiting for a swap forever...", timout))
             .unwrap()
     }
 

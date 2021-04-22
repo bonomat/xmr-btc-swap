@@ -41,6 +41,7 @@ impl Transport for TorTcpConfig {
     type Error = io::Error;
     type Listener = TcpListenStream<Tcp>;
     type ListenerUpgrade = Ready<Result<Self::Output, Self::Error>>;
+    #[allow(clippy::type_complexity)]
     type Dial = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn listen_on(self, addr: Multiaddr) -> Result<Self::Listener, TransportError<Self::Error>> {

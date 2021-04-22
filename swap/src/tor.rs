@@ -139,10 +139,10 @@ impl AuthenticatedConnection {
     /// they are on different networks.
     pub async fn add_services(
         &mut self,
-        services: &Vec<(u16, SocketAddr)>,
+        services: &[(u16, SocketAddr)],
         tor_key: &TorSecretKeyV3,
     ) -> Result<()> {
-        let mut listeners = services.as_slice().iter();
+        let mut listeners = services.iter();
         self.inner
             .add_onion_v3(tor_key, false, false, false, None, &mut listeners)
             .await
