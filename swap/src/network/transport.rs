@@ -23,8 +23,8 @@ pub fn build(id_keys: &identity::Keypair, tor_socks5_port: Option<u16>) -> Resul
 
     let tcp = TokioTcpConfig::new().nodelay(true);
     let tcp = match tor_socks5_port {
-        None => TorTcpConfig::new(tcp),
-        Some(tor_socks5_port) => TorTcpConfig::new(tcp).with_socks5_port(tor_socks5_port),
+        None => tcp.boxed(),
+        Some(tor_socks5_port) => TorTcpConfig::new(tcp, tor_socks5_port).boxed(),
     };
     let dns = TokioDnsConfig::system(tcp)?;
     let websocket = WsConfig::new(dns.clone());

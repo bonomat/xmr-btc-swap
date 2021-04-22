@@ -17,21 +17,14 @@ use tokio_socks::IntoTargetAddr;
 pub struct TorTcpConfig {
     inner: GenTcpConfig<Tcp>,
     /// Tor SOCKS5 proxy port number.
-    socks_port: Option<u16>,
+    socks_port: u16,
 }
 
 impl TorTcpConfig {
-    pub fn new(tcp: TokioTcpConfig) -> Self {
+    pub fn new(tcp: TokioTcpConfig, socks_port: u16) -> Self {
         Self {
             inner: tcp,
-            socks_port: None,
-        }
-    }
-
-    pub fn with_socks5_port(self, socks_port: u16) -> Self {
-        Self {
-            inner: self.inner,
-            socks_port: Some(socks_port),
+            socks_port,
         }
     }
 }
@@ -52,18 +45,17 @@ impl Transport for TorTcpConfig {
     // onion address. or it falls back to Tcp dialling
     fn dial(self, addr: Multiaddr) -> Result<Self::Dial, TransportError<Self::Error>> {
         async fn do_tor_dial(socks_port: u16, dest: String) -> Result<TcpStream, io::Error> {
-            tracing::info!("Connecting to Tor proxy ...");
+            tracing::trace!("Connecting through Tor proxy to address: {}", dest);
             let stream = connect_to_socks_proxy(dest, socks_port)
                 .await
                 .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e))?;
-            tracing::info!("Connection established");
+            tracing::trace!("Connection through Tor established");
             Ok(stream)
         }
 
-        match (to_onion_address(addr.clone()), self.socks_port) {
-            (Some(tor_address_string), Some(socks_port)) => {
-                tracing::debug!("Dialing Tor destination address: {}", tor_address_string);
-                Ok(Box::pin(do_tor_dial(socks_port, tor_address_string)))
+        match to_onion_address(addr.clone()) {
+            Some(tor_address_string) => {
+                Ok(Box::pin(do_tor_dial(self.socks_port, tor_address_string)))
             }
             _ => self.inner.dial(addr),
         }
