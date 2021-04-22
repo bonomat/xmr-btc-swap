@@ -34,7 +34,6 @@ use swap::protocol::alice::{run, EventLoop};
 use swap::seed::Seed;
 use swap::tor::{AuthenticatedConnection, UnauthenticatedConnection};
 use swap::{asb, bitcoin, env, kraken, monero, tor};
-use torut::onion::TorSecretKeyV3;
 use tracing::{info, warn};
 use tracing_subscriber::filter::LevelFilter;
 
@@ -84,7 +83,7 @@ async fn main() -> Result<()> {
     let (tor_socks5_port, _ac) = match uac.assert_tor_running().await {
         Ok(_) => {
             tracing::info!("Tor found. Setting up hidden service. ");
-            let ac = register_tor_services(config.network.clone().listen, uac).await?;
+            let ac = register_tor_services(config.network.clone().listen, uac, &seed).await?;
             (Some(uac.tor_proxy_port()), Some(ac))
         }
         Err(_) => {
@@ -238,6 +237,7 @@ async fn init_monero_wallet(
 async fn register_tor_services(
     networks: Vec<Multiaddr>,
     uac: UnauthenticatedConnection,
+    seed: &Seed,
 ) -> Result<AuthenticatedConnection> {
     let mut ac = uac.into_authenticated_connection().await?;
 
@@ -260,7 +260,7 @@ async fn register_tor_services(
 
     // Note: ideally we have deterministic keys but unfortunately there is no Api
     // for that yet.
-    let key = TorSecretKeyV3::generate();
+    let key = seed.derive_torv3_key();
 
     ac.add_services(&hidden_services_details, &key).await?;
 
