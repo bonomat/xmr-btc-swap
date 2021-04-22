@@ -45,7 +45,6 @@ impl Transport for TorTcpConfig {
     type Dial = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn listen_on(self, addr: Multiaddr) -> Result<Self::Listener, TransportError<Self::Error>> {
-        tracing::debug!("Trying to listen on: {}", addr);
         self.inner.listen_on(addr)
     }
 

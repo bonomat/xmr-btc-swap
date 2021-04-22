@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use tokio::net::TcpStream;
@@ -83,7 +83,7 @@ impl UnauthenticatedConnection {
 
         let tor_auth_data = tor_info
             .make_auth_data()?
-            .ok_or_else(|| anyhow!("Failed to make auth data."))?;
+            .context("Failed to make auth data.")?;
 
         // Get an authenticated connection to the Tor via the Tor Controller protocol.
         uc.authenticate(&tor_auth_data)
